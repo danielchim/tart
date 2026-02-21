@@ -25,6 +25,9 @@ struct UnsupportedHostOSError: Error, CustomStringConvertible {
         if let descriptorClass = descriptorClass {
           let descriptor = Dynamic(descriptorClass).alloc().init()
           descriptor.setPlatformVersion(platformVersion)
+
+          // ISA can be set as integer value or via enum
+          // Common values: 1 = M1, 2 = M2, 3 = M3, 4 = appleInternal4 (research/vphone)
           descriptor.setISA(isa)
 
           let hardwareModelClass = NSClassFromString("VZMacHardwareModel") as? NSObject.Type
@@ -105,6 +108,9 @@ struct UnsupportedHostOSError: Error, CustomStringConvertible {
       }
 
       result.hardwareModel = hardwareModel
+
+      // Disable production mode for research/development (private API)
+      Dynamic(result)._isProductionModeEnabled = false
 
       return result
     }

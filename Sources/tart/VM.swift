@@ -336,6 +336,14 @@ class VM: NSObject, VZVirtualMachineDelegate, ObservableObject {
       let sepClass = NSClassFromString("_VZSEPCoprocessorConfiguration")
       if let sepClass = sepClass {
         let sep = Dynamic(sepClass).alloc().initWithStorageURL(sepURL)
+
+        // Add GDB debug stub for SEP
+        let debugStubClass = NSClassFromString("_VZGDBDebugStubConfiguration")
+        if let debugStubClass = debugStubClass {
+          let debugStub = Dynamic(debugStubClass).alloc().init()
+          sep.debugStub = debugStub.asObject
+        }
+
         Dynamic(configuration)._coprocessors = [sep.asObject!]
       }
     #endif
