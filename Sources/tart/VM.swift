@@ -1,6 +1,7 @@
 import Foundation
 import Virtualization
 import Semaphore
+import Dynamic
 
 struct UnsupportedRestoreImageError: Error {
 }
@@ -325,6 +326,19 @@ class VM: NSObject, VZVirtualMachineDelegate, ObservableObject {
     noKeyboard: Bool = false
   ) throws -> VZVirtualMachineConfiguration {
     let configuration = VZVirtualMachineConfiguration()
+
+    // SEP coprocessor configuration (private API)
+    #if arch(arm64)
+      let sepURL = nvramURL.deletingLastPathComponent().appendingPathComponent("sep.bin")
+      if !FileManager.default.fileExists(atPath: sepURL.path) {
+        FileManager.default.createFile(atPath: sepURL.path, contents: nil)
+      }
+      let sepClass = NSClassFromString("_VZSEPCoprocessorConfiguration")
+      if let sepClass = sepClass {
+        let sep = Dynamic(sepClass).alloc().initWithStorageURL(sepURL)
+        Dynamic(configuration)._coprocessors = [sep.asObject!]
+      }
+    #endif
 
     // Boot loader
     configuration.bootLoader = try vmConfig.platform.bootLoader(nvramURL: nvramURL)

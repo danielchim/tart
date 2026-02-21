@@ -1,4 +1,5 @@
 import Virtualization
+import Dynamic
 
 struct UnsupportedHostOSError: Error, CustomStringConvertible {
   var description: String {
@@ -15,6 +16,27 @@ struct UnsupportedHostOSError: Error, CustomStringConvertible {
     init(ecid: VZMacMachineIdentifier, hardwareModel: VZMacHardwareModel) {
       self.ecid = ecid
       self.hardwareModel = hardwareModel
+    }
+
+    // Factory method to create a Darwin platform with custom hardware descriptor (private API)
+    static func withCustomHardwareDescriptor(platformVersion: UInt32, isa: UInt32) -> Darwin? {
+      #if arch(arm64)
+        let descriptorClass = NSClassFromString("_VZMacHardwareModelDescriptor")
+        if let descriptorClass = descriptorClass {
+          let descriptor = Dynamic(descriptorClass).alloc().init()
+          descriptor.setPlatformVersion(platformVersion)
+          descriptor.setISA(isa)
+
+          let hardwareModelClass = NSClassFromString("VZMacHardwareModel") as? NSObject.Type
+          if let hardwareModelClass = hardwareModelClass {
+            let hwModel = Dynamic(hardwareModelClass)._hardwareModelWith(descriptor.asObject!)
+            if let hwModel = hwModel.asObject as? VZMacHardwareModel {
+              return Darwin(ecid: VZMacMachineIdentifier(), hardwareModel: hwModel)
+            }
+          }
+        }
+      #endif
+      return nil
     }
 
     init(from decoder: Decoder) throws {
@@ -55,7 +77,15 @@ struct UnsupportedHostOSError: Error, CustomStringConvertible {
     }
 
     func bootLoader(nvramURL: URL) throws -> VZBootLoader {
-      VZMacOSBootLoader()
+      let bootloader = VZMacOSBootLoader()
+
+      // Set custom ROM URL for AVPBooter (private API)
+      let avpBooterPath = "/System/Library/Frameworks/Virtualization.framework/Versions/A/Resources/AVPBooter.vresearch1.bin"
+      if FileManager.default.fileExists(atPath: avpBooterPath) {
+        Dynamic(bootloader)._romURL = URL(filePath: avpBooterPath)
+      }
+
+      return bootloader
     }
 
     func platform(nvramURL: URL, needsNestedVirtualization: Bool) throws -> VZPlatformConfiguration {
@@ -97,7 +127,7 @@ struct UnsupportedHostOSError: Error, CustomStringConvertible {
           heightInPixels: vmConfig.display.height,
           // A reasonable guess according to Apple's documentation[1]
           // [1]: https://developer.apple.com/documentation/coregraphics/1456599-cgdisplayscreensize
-          pixelsPerInch: 72
+          pixelsPerInch: vmConfig.display.pixelsPerInch
         )
       ]
 
